@@ -1,170 +1,106 @@
-# KafkaAndDocker‑Products
+# Ecommerce Microservices
 
-Aplicação em .NET (C#) para demonstrar a integração de produtos com **Apache Kafka**, com configuração via **Docker Compose**. Permite enviar e consumir eventos de produtos usando o Kafka, Docker, e tópicos específicos.
-
----
-
-## Índice
-
-- [Descrição](#descrição)  
-- [Arquitetura](#arquitetura)  
-- [Pré‑requisitos](#pré-requisitos)  
-- [Instalação e Execução](#instalação-e-execução)  
-- [Uso da API](#uso-da-api)  
-- [Componentes principais](#componentes-principais)  
-- [Deploy com Docker](#deploy-com-docker)  
-- [Testes](#testes)  
-- [Boas práticas SOLID/Arquitetura](#boas-práticas-solidarquitetura)  
-- [Licença](#licença)
+Este projeto é uma solução de e-commerce baseada em microserviços, desenvolvida em .NET 8, utilizando Blazor para a interface, ASP.NET Core para APIs, Entity Framework Core para persistência e Kafka para mensageria.
 
 ---
 
-## Descrição
+## Estrutura dos Projetos
 
-Este projeto demonstra como construir um sistema de produtos usando:
+- **Ecommerce.AppHost**  
+  Projeto principal para inicialização e orquestração dos serviços (pode conter configurações globais e arquivos como kafka.yml).
 
-- Backend em **.NET 8**
-- Envio e consumo de mensagens para Kafka
-- Uso de **Docker Compose** para orquestração de containers: Zookeeper, Kafka, e app .NET
+- **Ecommerce.Model**  
+  Contém as classes de modelo compartilhadas entre os serviços, como `OrderModel` e `ProductModel`.
 
-Vamos enviar eventos de criação de produto para o Kafka e consumir para processamento/armazenamento.
+- **Ecommerce.OrderService**  
+  Microserviço responsável pelo gerenciamento de pedidos.  
+  - API REST para criação e consulta de pedidos.  
+  - Integração com Kafka para publicação de eventos de pedidos.
 
----
+- **Ecommerce.ProductService**  
+  Microserviço responsável pelo gerenciamento de produtos.  
+  - API REST para consulta de produtos.  
+  - Consome eventos do Kafka (exemplo: atualização de estoque).
 
-## Arquitetura
-
-1. **Produtos.Api** – Web API para criação/listagem de produtos. Publica evento Kafka ao criar.
-2. **Produtos.Kafka.Consumer** – Microserviço que consome eventos Kafka e processa lógica (ex: logging, armazenamento).
-3. **Docker Compose (docker-compose.yml)** – Define containers:
-   - Zookeeper
-   - Kafka
-   - API .NET
-   - Consumer .NET
-
----
-
-## Pré‑requisitos
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [Docker](https://docker.com)
-- [Docker Compose] (v2)
+- **Ecommerce.Tests**  
+  Projeto de testes unitários utilizando xUnit e Moq, cobrindo os principais fluxos dos serviços.
 
 ---
 
-## Instalação e Execução
+## Tecnologias Utilizadas
 
-1. Clone o projeto:
-   ```bash
-   git clone https://github.com/FabioNeves28/KafkaAndDocker-Products.git
-   cd KafkaAndDocker-Products
-   ```
-
-2. Assegure-se de ter o .NET 8 instalado:
-   ```bash
-   dotnet --version
-   ```
-
-3. Faça build das aplicações:
-   ```bash
-   dotnet build
-   ```
+- .NET 8  
+- Blazor (para interface web)  
+- ASP.NET Core Web API  
+- Entity Framework Core (com SQL Server e InMemory para testes)  
+- Apache Kafka (mensageria)  
+- xUnit e Moq (testes unitários)  
+- Docker (opcional, para infraestrutura)
 
 ---
 
-## Docker Compose
+## Como Executar
 
-Inicie todos os serviços com:
+### 1. Configurar o Banco de Dados
+
+Certifique-se de que o SQL Server está disponível e as strings de conexão estão corretas nos arquivos `appsettings.json` dos serviços.
+
+### 2. Configurar o Kafka
+
+Utilize o arquivo `kafka.yml` para subir o Kafka via Docker Compose:
 
 ```bash
-docker-compose up --build
+docker compose -f kafka.yml up -d
 ```
 
-Isso vai subir:
+### 3. Executar os Serviços
 
-- `zookeeper` e `kafka`
-- `produtos.api` acessível em `http://localhost:5005`
-- `produtos.consumer` rodando em container separado, consumindo o tópico Kafka
+Inicie os projetos `Ecommerce.OrderService` e `Ecommerce.ProductService` via Visual Studio ou CLI:
 
-Para rodar em background:
 ```bash
-docker-compose up -d
+dotnet run --project Ecommerce.OrderService
+dotnet run --project Ecommerce.ProductService
+```
+
+### 4. Executar a Interface Blazor
+
+Inicie o projeto Blazor (caso exista um projeto como `Ecommerce.BlazorApp`):
+
+```bash
+dotnet run --project Ecommerce.BlazorApp
 ```
 
 ---
 
-## Uso da API
+## Endpoints Principais
 
-### Endpoints disponíveis (porta 5005):
+### OrderService
 
-- `GET /api/Products` – lista produtos consumidos pelo Kafka
-- `POST /api/Products` – cria produto e publica evento Kafka
+- `GET /api/order`  
+  Lista todos os pedidos.
 
-#### Exemplo de request:
+- `POST /api/order`  
+  Cria um novo pedido.
 
-```http
-POST http://localhost:5005/api/Products
-Content-Type: application/json
+### ProductService
 
-{
-  "name": "Camiseta Oficial",
-  "price": 79.90
-}
-```
+- `GET /api/product`  
+  Lista todos os produtos.
 
-#### Exemplo de response consumido:
-```json
-{
-  "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-  "name": "Camiseta Oficial",
-  "price": 79.9,
-  "createdAt": "2025-06-18T12:34:56Z"
-}
-```
+- `GET /api/product/{id}`  
+  Consulta um produto pelo ID.
 
 ---
 
-## Componentes principais
+## Padrões e Boas Práticas
 
-- **Domain**: classes `Product`, `ProductCreatedEvent`
-- **API**: controller `ProductsController`, serviço `ProductService` que publica evento em Kafka
-- **Consumer**: `ProdutoConsumerService` que consome eventos do tópico `produto-created`, exibe no console e armazena em banco (em memória ou persistente)
-
----
-
-## Testes / Exemplos
-
-1. Subir containers com `docker-compose`
-2. Enviar POST conforme exemplo acima
-3. No console do consumer será exibido algo como:
-
-```
-Recebido evento: { "id":"...","name":"Camiseta Oficial","price":79.9,"createdAt":"..."}
-```
-
-4. Consultar `GET /api/Products` retorna o produto consumido.
+- **SOLID**: Serviços e controllers seguem princípios de responsabilidade única e injeção de dependências.  
+- **Testes**: Cobertura de testes unitários para regras de negócio e persistência.  
+- **Mensageria**: Integração com Kafka para comunicação assíncrona entre serviços.
 
 ---
 
-## Boas práticas SOLID / Arquitetura
+## Observações
 
-- **Domain** define entidades e eventos
-- **Services** implementam lógica (publicação/consumo Kafka)
-- **Infra** contém implementações concretas (Produzir/consumir Kafka)
-- **API** implementa endpoints e injeta dependências via interfaces
-- **Consumer** segue separação de responsabilidades
-
----
-
-## Futuras melhorias
-
-- Persistência em banco de dados (PostgreSQL, etc.)
-- Balanceamento/escalonamento de consumidores
-- Suporte a envio via UI ou Blazor
-- Testes unitários/integration com Kafka embedded
-
----
-
-## Licença
-
-Projeto disponibilizado com licença MIT.  
-© 2025 Fábio Neves
+- Ajuste as strings de conexão e configurações de Kafka conforme seu ambiente.  
+- O projeto pode ser expandido com autenticação, autorização, logs e monitoramento.
